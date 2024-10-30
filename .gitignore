@@ -4,6 +4,7 @@ lib/
 modules/
 timestamp
 VERSION
+build/*
 include/version.h
 *.o
 *.so
