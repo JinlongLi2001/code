@@ -74,7 +74,7 @@
    REALTYPE, public, target                            :: w_adv,w_height
 
 !  Parameters for water classification - default Jerlov type I
-   REALTYPE, public, target                            :: A,g1,g2
+   REALTYPE, public, target                            :: A = 0.7_8, g1 = 0.40_8, g2 = 8.0_8
 
 !------------------------------------------------------------------------------
 !
@@ -84,108 +84,112 @@
 !------------------------------------------------------------------------------
 
 !  Salinity profile(s)
-   integer, public           :: s_prof_method
-   integer, public           :: s_analyt_method
-   character(LEN=PATH_MAX)   :: s_prof_file
-   REALTYPE                  :: z_s1,s_1,z_s2,s_2
-   REALTYPE                  :: s_obs_NN
-   REALTYPE                  :: SRelaxTauM
-   REALTYPE                  :: SRelaxTauS
-   REALTYPE                  :: SRelaxTauB
-   REALTYPE                  :: SRelaxSurf
-   REALTYPE                  :: SRelaxBott
+   integer, public           :: s_prof_method     = 0
+   integer, public           :: s_analyt_method   = 1
+   character(LEN=PATH_MAX)   :: s_prof_file       = 'sprof.dat'
+   REALTYPE                  :: &
+        z_s1 = _ZERO_, s_1 = _ZERO_, z_s2 = _ZERO_, s_2 = _ZERO_
+   REALTYPE                  :: s_obs_NN   = _ZERO_
+   REALTYPE                  :: SRelaxTauM = _ZERO_
+   REALTYPE                  :: SRelaxTauS = _ZERO_
+   REALTYPE                  :: SRelaxTauB = _ZERO_
+   REALTYPE                  :: SRelaxSurf = _ZERO_
+   REALTYPE                  :: SRelaxBott = _ZERO_
 
 !  Temperature profile(s)
-   integer, public           :: t_prof_method
-   integer, public           :: t_analyt_method
-   character(LEN=PATH_MAX)   :: t_prof_file
-   REALTYPE                  :: z_t1,t_1,z_t2,t_2
-   REALTYPE                  :: t_obs_NN
-   REALTYPE                  :: TRelaxTauM
-   REALTYPE                  :: TRelaxTauS
-   REALTYPE                  :: TRelaxTauB
-   REALTYPE                  :: TRelaxSurf
-   REALTYPE                  :: TRelaxBott
+   integer, public           :: t_prof_method      = 0
+   integer, public           :: t_analyt_method    = 1
+   character(LEN=PATH_MAX)   :: t_prof_file        = 'tprof.dat'
+   REALTYPE                  :: &
+        z_t1 = _ZERO_, t_1 = _ZERO_, z_t2 = _ZERO_, t_2 = _ZERO_
+   REALTYPE                  :: t_obs_NN   = _ZERO_
+   REALTYPE                  :: TRelaxTauM = _ZERO_
+   REALTYPE                  :: TRelaxTauS = _ZERO_
+   REALTYPE                  :: TRelaxTauB = _ZERO_
+   REALTYPE                  :: TRelaxSurf = _ZERO_
+   REALTYPE                  :: TRelaxBott = _ZERO_
 
 !  Oxygen profile(s)
-   integer, public           :: o2_prof_method
-   integer, public           :: o2_units
-   character(LEN=PATH_MAX)   :: o2_prof_file
+   integer, public           :: o2_prof_method = 0
+   integer, public           :: o2_units       = 1
+   character(LEN=PATH_MAX)   :: o2_prof_file   = 'o2.dat'
 
 !  External pressure - 'press' namelist
-   integer, public           :: ext_press_method,ext_press_mode
-   character(LEN=PATH_MAX)   :: ext_press_file
-   REALTYPE, public          :: PressConstU
-   REALTYPE, public          :: PressConstV
-   REALTYPE, public          :: PressHeight
-   REALTYPE, public          :: PeriodM
-   REALTYPE, public          :: AmpMu
-   REALTYPE, public          :: AmpMv
-   REALTYPE, public          :: PhaseMu
-   REALTYPE, public          :: PhaseMv
-   REALTYPE, public          :: PeriodS
-   REALTYPE, public          :: AmpSu
-   REALTYPE, public          :: AmpSv
-   REALTYPE, public          :: PhaseSu
-   REALTYPE, public          :: PhaseSv
+   integer, public           :: ext_press_method = 0, ext_press_mode = 0
+   character(LEN=PATH_MAX)   :: ext_press_file = ''
+   REALTYPE, public          :: PressConstU    = _ZERO_
+   REALTYPE, public          :: PressConstV    = _ZERO_
+   REALTYPE, public          :: PressHeight    = _ZERO_
+   REALTYPE, public          :: PeriodM        = 44714._8
+   REALTYPE, public          :: AmpMu          = _ZERO_
+   REALTYPE, public          :: AmpMv          = _ZERO_
+   REALTYPE, public          :: PhaseMu        = _ZERO_
+   REALTYPE, public          :: PhaseMv        = _ZERO_
+   REALTYPE, public          :: PeriodS        = 43200._8
+   REALTYPE, public          :: AmpSu          = _ZERO_
+   REALTYPE, public          :: AmpSv          = _ZERO_
+   REALTYPE, public          :: PhaseSu        = _ZERO_
+   REALTYPE, public          :: PhaseSv        = _ZERO_
 
 !  Internal pressure - 'internal_pressure' namelist
-   integer, public           :: int_press_method
-   character(LEN=PATH_MAX)   :: int_press_file
-   REALTYPE, public          :: const_dsdx
-   REALTYPE, public          :: const_dsdy
-   REALTYPE, public          :: const_dtdx
-   REALTYPE, public          :: const_dtdy
-   logical, public           :: s_adv
-   logical, public           :: t_adv
+   integer, public           :: int_press_method = 0
+   character(LEN=PATH_MAX)   :: int_press_file   = ''
+   REALTYPE, public          :: const_dsdx       = _ZERO_
+   REALTYPE, public          :: const_dsdy       = _ZERO_
+   REALTYPE, public          :: const_dtdx       = _ZERO_
+   REALTYPE, public          :: const_dtdy       = _ZERO_
+   logical, public           :: s_adv            = .false.
+   logical, public           :: t_adv            = .false.
 
 !  Light extinction - the 'extinct' namelist
-   integer                   :: extinct_method
-   character(LEN=PATH_MAX)   :: extinct_file
+   integer                   :: extinct_method   = 1
+   character(LEN=PATH_MAX)   :: extinct_file     = 'extinction.dat'
+   ! extinct_method=7 - user defined
+   ! default values are from Lago Maggiore, Stips
 
 !  Vertical advection velocity - 'w_advspec' namelist
-   integer, public           :: w_adv_method
-   REALTYPE, public          :: w_adv0
-   REALTYPE, public          :: w_adv_height0
-   character(LEN=PATH_MAX)   :: w_adv_file
-   integer, public           :: w_adv_discr
+   integer, public           :: w_adv_method   = 0
+   REALTYPE, public          :: w_adv0         = _ZERO_
+   REALTYPE, public          :: w_adv_height0  = _ZERO_
+   character(LEN=PATH_MAX)   :: w_adv_file     = 'w_adv.dat'
+   integer, public           :: w_adv_discr    = 1
 
 !  Sea surface elevations - 'zetaspec' namelist
-   integer,public            :: zeta_method
-   character(LEN=PATH_MAX)   :: zeta_file
-   REALTYPE, public          :: zeta_scale
-   REALTYPE, public          :: zeta_offset
-   REALTYPE, public          :: zeta_0
-   REALTYPE, public          :: period_1
-   REALTYPE, public          :: amp_1
-   REALTYPE, public          :: phase_1
-   REALTYPE, public          :: period_2
-   REALTYPE, public          :: amp_2
-   REALTYPE, public          :: phase_2
+   integer,public            :: zeta_method = 0
+   character(LEN=PATH_MAX)   :: zeta_file   = 'zeta.dat'
+   REALTYPE, public          :: zeta_scale  = _ONE_
+   REALTYPE, public          :: zeta_offset = _ZERO_
+   REALTYPE, public          :: zeta_0      = _ZERO_
+   REALTYPE, public          :: period_1    = 44714._8
+   REALTYPE, public          :: amp_1       = _ZERO_
+   REALTYPE, public          :: phase_1     = _ZERO_
+   REALTYPE, public          :: period_2    = 43200._8
+   REALTYPE, public          :: amp_2       = _ZERO_
+   REALTYPE, public          :: phase_2     = _ZERO_
 
 !  Wind waves - 'wave_nml' namelist
-   integer,public            :: wave_method
-   character(LEN=PATH_MAX)   :: wave_file
-   REALTYPE, public          :: Hs
-   REALTYPE, public          :: Tz
-   REALTYPE, public          :: phiw
+   integer,public            :: wave_method = 0
+   character(LEN=PATH_MAX)   :: wave_file   = 'wave.dat'
+   REALTYPE, public          :: Hs          = _ZERO_
+   REALTYPE, public          :: Tz          = _ZERO_
+   REALTYPE, public          :: phiw        = _ZERO_
 
 !  Observed velocity profile profiles - typically from ADCP
-   integer                   :: vel_prof_method
-   CHARACTER(LEN=PATH_MAX)   :: vel_prof_file
-   REALTYPE, public          :: vel_relax_tau
-   REALTYPE, public          :: vel_relax_ramp
+   integer                   :: vel_prof_method = 0
+   CHARACTER(LEN=PATH_MAX)   :: vel_prof_file   = 'velprof.dat'
+   REALTYPE, public          :: vel_relax_tau   = 3600._8
+   REALTYPE, public          :: vel_relax_ramp  = 86400._8
 
 !  Observed dissipation profiles
-   integer                   :: e_prof_method
-   REALTYPE                  :: e_obs_const
-   CHARACTER(LEN=PATH_MAX)   :: e_prof_file
+   integer                   :: e_prof_method = 0
+   REALTYPE                  :: e_obs_const   = 1.e-12_8
+   CHARACTER(LEN=PATH_MAX)   :: e_prof_file   = 'eprof.dat'
 
 !  Buoyancy - 'bprofile' namelist
-   REALTYPE, public          :: b_obs_surf,b_obs_NN
-   REALTYPE, public          :: b_obs_sbf
+   REALTYPE, public          :: b_obs_surf = _ZERO_, b_obs_NN = _ZERO_
+   REALTYPE, public          :: b_obs_sbf = _ZERO_
 
-   REALTYPE,public, parameter:: pi=3.141592654d0
+   REALTYPE,public, parameter:: pi = 3.14159265359d0
 
 ! !DEFINED PARAMETERS:
 
@@ -301,121 +305,6 @@
 !-----------------------------------------------------------------------
 !BOC
    LEVEL1 'init_observations'
-
-!  Salinity profile(s)
-   s_prof_method=0
-   s_analyt_method=1
-   s_prof_file='sprof.dat'
-   z_s1 = _ZERO_
-   s_1 = _ZERO_
-   z_s2 = _ZERO_
-   s_2 = _ZERO_
-   s_obs_NN = _ZERO_
-   SRelaxTauM=_ZERO_
-   SRelaxTauS=_ZERO_
-   SRelaxTauB=_ZERO_
-   SRelaxSurf=_ZERO_
-   SRelaxBott=_ZERO_
-
-!  Temperature profile(s)
-   t_prof_method=0
-   t_analyt_method=1
-   t_prof_file='tprof.dat'
-   z_t1 = _ZERO_
-   t_1 = _ZERO_
-   z_t2 = _ZERO_
-   t_2 = _ZERO_
-   t_obs_NN = _ZERO_
-   TRelaxTauM=_ZERO_
-   TRelaxTauS=_ZERO_
-   TRelaxTauB=_ZERO_
-   TRelaxSurf=_ZERO_
-   TRelaxBott=_ZERO_
-
-!  Oxygen profile(s)
-   o2_prof_method=0
-   o2_units=1
-   o2_prof_file='o2.dat'
-
-!  External pressure - 'press' namelist
-   ext_press_method=0
-   ext_press_mode=0
-   ext_press_file=''
-   PressConstU=_ZERO_
-   PressConstV=_ZERO_
-   PressHeight=_ZERO_
-   PeriodM=44714.
-   AmpMu=_ZERO_
-   AmpMv=_ZERO_
-   PhaseMu=_ZERO_
-   PhaseMv=_ZERO_
-   PeriodS=43200.
-   AmpSu=_ZERO_
-   AmpSv=_ZERO_
-   PhaseSu=_ZERO_
-   PhaseSv=_ZERO_
-
-!  Internal pressure - 'internal_pressure' namelist
-   int_press_method=0
-   int_press_file=''
-   const_dsdx=_ZERO_
-   const_dsdy=_ZERO_
-   const_dtdx=_ZERO_
-   const_dtdy=_ZERO_
-   s_adv=.false.
-   t_adv=.false.
-
-!  Light extinction - the 'extinct' namelist
-   extinct_method=1
-   extinct_file='extinction.dat'
-   ! extinct_method=7 - user defined
-   ! default values are from Lago Maggiore, Stips
-   A=0.7
-   g1=0.40
-   g2=8.0
-
-!  Vertical advection velocity - 'w_advspec' namelist
-   w_adv_method=0
-   w_adv0=_ZERO_
-   w_adv_height0=_ZERO_
-   w_adv_file='w_adv.dat'
-   w_adv_discr=1
-
-!  Sea surface elevations - 'zetaspec' namelist
-   zeta_method=0
-   zeta_file='zeta.dat'
-   zeta_scale=_ONE_
-   zeta_offset=_ZERO_
-   zeta_0=_ZERO_
-   period_1=44714.
-   amp_1=_ZERO_
-   phase_1=_ZERO_
-   period_2=43200.
-   amp_2=_ZERO_
-   phase_2=_ZERO_
-
-!  Wind waves - 'wave_nml' namelist
-   wave_method=0
-   wave_file='wave.dat'
-   Hs=_ZERO_
-   Tz=_ZERO_
-   phiw=_ZERO_
-
-!  Observed velocity profile profiles - typically from ADCP
-   vel_prof_method=0
-   vel_prof_file='velprof.dat'
-   vel_relax_tau=3600.
-   vel_relax_ramp=86400.
-
-!  Observed dissipation profiles
-   e_prof_method=0
-   e_obs_const=1.e-12
-   e_prof_file='eprof.dat'
-
-!  Buoyancy - 'bprofile' namelist
-   b_obs_surf=_ZERO_
-   b_obs_NN=_ZERO_
-   b_obs_sbf=_ZERO_
 
    open(namlst,file=fn,status='old',action='read',err=80)
    read(namlst,nml=sprofile,err=81)

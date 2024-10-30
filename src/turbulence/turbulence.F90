@@ -36,7 +36,7 @@
    private
 !
 ! !PUBLIC MEMBER FUNCTIONS:
-   public init_turbulence, do_turbulence
+   public post_init_turbulence, init_turbulence, do_turbulence, report_model
    public k_bc,q2over2_bc,epsilon_bc,psi_bc,q2l_bc
    public clean_turbulence
 #ifdef _PRINTSTATE_
@@ -99,154 +99,459 @@
 # endif
 
 !  some additional constants
-   REALTYPE, public                              :: cm0,cmsf,cde,rcm, b1
+   REALTYPE, public                              :: &
+        cm0 = _ZERO_, cmsf = _ZERO_, cde = _ZERO_, rcm = _ZERO_, b1 = _ZERO_
 
 !  Prandtl-number in neutrally stratified flow
-   REALTYPE, public                              :: Prandtl0
+   REALTYPE, public                              :: &
+        Prandtl0 = _ZERO_
 
 !  parameters for wave-breaking
-   REALTYPE, public                              :: craig_m,sig_e0
+   REALTYPE, public                              :: &
+        craig_m = _ZERO_, sig_e0 = _ZERO_
 
+!-------------------------------------------------------------------------------
+! general
+!-------------------------------------------------------------------------------
+! turb_method      [integer]
+!                    type of turbulence closure
+!                    0: convective adjustment
+!                    1: analytical eddy visc. and diff. profiles, not coded yet
+!                    2: turbulence Model calculating TKE and length scale
+!                    3: second-order model
+!                    99: KPP model
+! tke_method       [integer]
+!                    type of equation for TKE
+!                    1: algebraic equation
+!                    2: dynamic equation (k-epsilon style)
+!                    3: dynamic equation (Mellor-Yamada style)
+!                    This variable is only used if (turb_method = 2 or
+!                      turb_method = 3)
+! len_scale_method [integer]
+!                    type of model for dissipative length scale
+!                    1: parabolic shape
+!                    2: triangle shape
+!                    3: Xing and Davies [1995]
+!                    4: Robert and Ouellet [1987]
+!                    5: Blackadar (two boundaries) [1962]
+!                    6: Bougeault and Andre [1986]
+!                    7: Eifler and Schrimpf (ISPRAMIX) [1992]
+!                    8: dynamic dissipation rate equation
+!                    9: dynamic Mellor-Yamada q^2l-equation
+!                    10: generic length scale (GLS)
+!                    This variable is only used if (turb_method = 2 or
+!                      turb_method = 3)
+! stab_method      [integer]
+!                    type of stability function
+!                    1: constant stability functions
+!                    2: Munk and Anderson [1954]
+!                    3: Schumann and Gerz [1995]
+!                    4: Eifler and Schrimpf [1992]
+!                    This variable is only used if turb_method = 2
+!-------------------------------------------------------------------------------
 !  the 'turbulence' namelist
-   integer, public                               :: turb_method
-   integer, public                               :: tke_method
-   integer, public                               :: len_scale_method
-   integer, public                               :: stab_method
+   
+   integer, public                               :: turb_method      = 2
+   integer, public                               :: tke_method       = 2
+   integer, public                               :: len_scale_method = 8
+   integer, public                               :: stab_method      = 3
 
+!-------------------------------------------------------------------------------
+! boundary conditions
+!-------------------------------------------------------------------------------
+! k_ubc    [integer]
+!            upper boundary condition for k-equation
+!            0: prescribed BC
+!            1: flux BC
+! k_lbc    [integer]
+!            lower boundary condition for k-equation
+!            0: prescribed BC
+!            1: flux BC
+! psi_ubc  [integer]
+!            upper boundary condition for the length-scale equation (e.g.
+!              epsilon, kl, omega, GLS)
+!            0: prescribed BC
+!            1: flux BC
+! psi_lbc  [integer]
+!            lower boundary condition for the length-scale equation (e.g.
+!              epsilon, kl, omega, GLS)
+!            0: prescribed BC
+!            1: flux BC
+! ubc_type [integer]
+!            type of upper boundary layer
+!            0: viscous sublayer (not yet impl.)
+!            1: logarithmic law of the wall
+!            2: tke-injection (breaking waves)
+! lbc_type [integer]
+!            type of lower boundary layer
+!            0: viscous sublayer (not yet impl.)
+!            1: logarithmic law of the wall
+!-------------------------------------------------------------------------------
 !  the 'bc' namelist
-   integer, public                               :: k_ubc
-   integer, public                               :: k_lbc
-   integer, public                               :: kb_ubc
-   integer, public                               :: kb_lbc
-   integer, public                               :: psi_ubc
-   integer, public                               :: psi_lbc
-   integer, public                               :: ubc_type
-   integer, public                               :: lbc_type
 
+   integer, public                               :: k_ubc    = 1   
+   integer, public                               :: k_lbc    = 1      
+   integer, public                               :: kb_ubc   = 1
+   integer, public                               :: kb_lbc   = 1
+   integer, public                               :: psi_ubc  = 1
+   integer, public                               :: psi_lbc  = 1
+   integer, public                               :: ubc_type = 1
+   integer, public                               :: lbc_type = 1
+
+!-------------------------------------------------------------------------------
+! turbulence parameters
+!-------------------------------------------------------------------------------
+! cm0_fix       [float]
+!                 value of cm0
+!                 This variable is only used if /gotmturb/turbulence/turb_method
+!                   = 2
+! Prandtl0_fix  [float]
+!                 value of the turbulent Prandtl-number
+!                 This variable is only used if /gotmturb/turbulence/turb_method
+!                   = 2
+! cw            [float]
+!                 constant of the wave-breaking model (Craig & Banner (1994) use
+!                   cw=100)
+! compute_kappa [bool]
+!                 compute von Karman constant from model parameters
+! kappa         [float]
+!                 the desired von Karman constant
+!                 This variable is only used if compute_kappa = True
+! compute_c3    [bool]
+!                 compute c3 (E3 for Mellor-Yamada) for given Ri_st
+! Ri_st         [float]
+!                 the desired steady-state Richardson number
+!                 This variable is only used if compute_c3 = True
+! length_lim    [bool]
+!                 apply length scale limitation (see Galperin et al. 1988)
+! galp          [float]
+!                 coef. for length scale limitation
+!                 This variable is only used if length_lim = True
+! const_num     [float, unit = m^2/s]
+!                 minimum eddy diffusivity
+!                 This variable is only used if /gotmturb/turbulence/turb_method
+!                   = 0
+! const_nuh     [float, unit = m^2/s]
+!                 minimum heat diffusivity
+!                 This variable is only used if /gotmturb/turbulence/turb_method
+!                   = 0
+! k_min         [float, unit = m^2/s^2]
+!                 minimum TKE
+! eps_min       [float, unit = m^2/s^3]
+!                 minimum dissipation rate
+! kb_min        [float, unit = m^2/s^4]
+!                 minimum buoyancy variance
+! epsb_min      [float, unit = m^2/s^5]
+!                 minimum buoyancy variance destruction rate
+!-------------------------------------------------------------------------------
 !  the 'turb_param' namelist
-   REALTYPE, public                              :: cm0_fix
-   REALTYPE, public                              :: Prandtl0_fix
-   REALTYPE, public                              :: cw
-   logical                                       :: compute_kappa
-   REALTYPE, public                              :: kappa
-   logical                                       :: compute_c3
-   REALTYPE                                      :: ri_st
-   logical,  public                              :: length_lim
-   REALTYPE, public                              :: galp
-   REALTYPE, public                              :: const_num
-   REALTYPE, public                              :: const_nuh
-   REALTYPE, public                              :: k_min
-   REALTYPE, public                              :: eps_min
-   REALTYPE, public                              :: kb_min
-   REALTYPE, public                              :: epsb_min
 
+   REALTYPE, public                              :: cm0_fix       = 0.5477_8
+   REALTYPE, public                              :: Prandtl0_fix  = 0.74_8
+   REALTYPE, public                              :: cw            = 100.0_8
+   logical,  public                              :: compute_kappa = .false.
+   REALTYPE, public                              :: kappa         = 0.4_8
+   logical,  public                              :: compute_c3    = .false.
+   REALTYPE, public                              :: ri_st         = 0.25_8
+   logical,  public                              :: length_lim    = .false.
+   REALTYPE, public                              :: galp          = 0.53_8
+   REALTYPE, public                              :: const_num     = 5.0e-4_8
+   REALTYPE, public                              :: const_nuh     = 5.0e-4_8
+   REALTYPE, public                              :: k_min         = 1.0e-8_8
+   REALTYPE, public                              :: eps_min       = 1.0e-12_8
+   REALTYPE, public                              :: kb_min        = 1.0e-8_8
+   REALTYPE, public                              :: epsb_min      = 1.0e-12_8
+
+!-------------------------------------------------------------------------------
+! the generic model (Umlauf & Burchard, J. Mar. Res., 2003)
+!-------------------------------------------------------------------------------
+! compute_param [bool]
+!                 compute the model parameters
+! gen_m         [float]
+!                 exponent for k
+! gen_n         [float]
+!                 exponent for l
+!                 This variable is only used if compute_param = False
+! gen_p         [float]
+!                 exponent for cm0
+!                 This variable is only used if compute_param = False
+! cpsi1         [float]
+!                 emp. coef. cpsi1 in psi equation
+!                 This variable is only used if compute_param = False
+! cpsi2         [float]
+!                 emp. coef. cpsi2 in psi equation
+!                 This variable is only used if compute_param = False
+! cpsi3minus    [float]
+!                 cpsi3 for stable stratification
+!                 This variable is only used if compute_param = False
+! cpsi3plus     [float]
+!                 cpsi3 for unstable stratification
+!                 This variable is only used if compute_param = False
+! sig_kpsi      [float]
+!                 Schmidt number for TKE diffusivity
+!                 This variable is only used if compute_param = False
+! sig_psi       [float]
+!                 Schmidt number for psi diffusivity
+!                 This variable is only used if compute_param = False
+! gen_d         [float]
+!                 gen_d
+!                 This variable is only used if compute_param = False
+! gen_alpha     [float]
+!                 gen_alpha
+!                 This variable is only used if compute_param = False
+! gen_l         [float]
+!                 gen_l
+!                 This variable is only used if compute_param = False
+!-------------------------------------------------------------------------------   
 !  the 'generic' namelist
-   logical                                       :: compute_param
-   REALTYPE, public                              :: gen_m
-   REALTYPE, public                              :: gen_n
-   REALTYPE, public                              :: gen_p
-   REALTYPE, public                              :: cpsi1
-   REALTYPE, public                              :: cpsi2
-   REALTYPE, public                              :: cpsi3minus
-   REALTYPE, public                              :: cpsi3plus
-   REALTYPE                                      :: sig_kpsi
-   REALTYPE, public                              :: sig_psi
-   REALTYPE                                      :: gen_d
-   REALTYPE                                      :: gen_alpha
-   REALTYPE                                      :: gen_l
+   
+   logical,  public                              :: compute_param = .false.
+   REALTYPE, public                              :: gen_m         = 1.5_8
+   REALTYPE, public                              :: gen_n         = -1.0_8
+   REALTYPE, public                              :: gen_p         = 3.0_8
+   REALTYPE, public                              :: cpsi1         = 1.44_8
+   REALTYPE, public                              :: cpsi2         = 1.92_8
+   REALTYPE, public                              :: cpsi3minus    = 0.0_8
+   REALTYPE, public                              :: cpsi3plus     = 1.0_8
+   REALTYPE, public                              :: sig_kpsi      = 1.0_8
+   REALTYPE, public                              :: sig_psi       = 1.3_8
+   REALTYPE, public                              :: gen_d         = -1.2_8
+   REALTYPE, public                              :: gen_alpha     = -2.0_8
+   REALTYPE, public                              :: gen_l         = 0.2_8
 
+!-------------------------------------------------------------------------------
+! the k-epsilon model (Rodi 1987)
+!-------------------------------------------------------------------------------
+! ce1      [float]
+!            emp. coef. ce1 in diss. eq.
+! ce2      [float]
+!            emp. coef. ce2 in diss. eq.
+! ce3minus [float]
+!            ce3 for stable stratification
+!            This variable is not used if /gotmturb/turb_param/compute_c3 = True
+! ce3plus  [float]
+!            ce3 for unstable stratification (Rodi 1987: ce3plus=1.0)
+! sig_k    [float]
+!            Schmidt number for TKE diffusivity
+! sig_e    [float]
+!            Schmidt number for diss. diffusivity
+! sig_peps [bool]
+!            if .true. -> the wave breaking parameterisation suggested by
+!              Burchard (JPO 31, 2001, 3133-3145) will be used.
+!-------------------------------------------------------------------------------
 !  the 'keps' namelist
-   REALTYPE, public                              :: ce1
-   REALTYPE, public                              :: ce2
-   REALTYPE, public                              :: ce3minus
-   REALTYPE, public                              :: ce3plus
-   REALTYPE, public                              :: sig_k
-   REALTYPE, public                              :: sig_e
-   logical,  public                              :: sig_peps
+   
+   REALTYPE, public                              :: ce1      = 1.44_8
+   REALTYPE, public                              :: ce2      = 1.92_8
+   REALTYPE, public                              :: ce3minus = 0.0_8
+   REALTYPE, public                              :: ce3plus  = 1.0_8
+   REALTYPE, public                              :: sig_k    = 1.0_8
+   REALTYPE, public                              :: sig_e    = 1.3_8
+   logical,  public                              :: sig_peps = .false.
 
+!-------------------------------------------------------------------------------
+! the Mellor-Yamada model (Mellor & Yamada 1982)
+!-------------------------------------------------------------------------------
+! e1         [float]
+!              coef. e1 in MY q**2 l equation
+! e2         [float]
+!              coef. e2 in MY q**2 l equation
+! e3         [float]
+!              coef. e3 in MY q**2 l equation
+! sq         [float]
+!              turbulent diffusivities of q**2 (= 2k)
+! sl         [float]
+!              turbulent diffusivities of q**2 l
+! my_length  [integer]
+!              prescribed barotropic lengthscale in q**2 l equation of MY
+!              1: parabolic
+!              2: triangular
+!              3: lin. from surface
+! new_constr [bool]
+!              stabilisation of Mellor-Yamada stability functions according to
+!                Burchard & Deleersnijder (2001)
+!-------------------------------------------------------------------------------   
 !  the 'my' namelist
-   REALTYPE, public                              :: e1
-   REALTYPE, public                              :: e2
-   REALTYPE, public                              :: e3
-   REALTYPE, public                              :: sq
-   REALTYPE, public                              :: sl
-   integer,  public                              :: my_length
-   logical,  public                              :: new_constr
 
+   REALTYPE, public                              :: e1         = 1.8_8
+   REALTYPE, public                              :: e2         = 1.33_8
+   REALTYPE, public                              :: e3         = 1.8_8
+   REALTYPE, public                              :: sq         = 0.2_8
+   REALTYPE, public                              :: sl         = 0.2_8
+   integer,  public                              :: my_length  = 1
+   logical,  public                              :: new_constr = .false.
+
+!-------------------------------------------------------------------------------
+! the second-order model
+!-------------------------------------------------------------------------------
+! scnd_method [integer]
+!               type of second-order model
+!               1: EASM with quasi-equilibrium
+!               2: EASM with weak equilibrium, buoy.-variance algebraic
+!               3: EASM with weak equilibrium, buoy.-variance from PDE
+! kb_method   [integer]
+!               type of equation for buoyancy variance
+!               1: algebraic equation for buoyancy variance
+!               2: PDE for buoyancy variance
+! epsb_method [integer]
+!               type of equation for variance destruction
+!               1: algebraic equation for variance destruction
+!               2: PDE for variance destruction
+! scnd_coeff  [integer]
+!               coefficients of second-order model
+!               0: read the coefficients from this file
+!               1: coefficients of Gibson and Launder (1978)
+!               2: coefficients of Mellor and Yamada (1982)
+!               3: coefficients of Kantha and Clayson (1994)
+!               4: coefficients of Luyten et al. (1996)
+!               5: coefficients of Canuto et al. (2001) (version A)
+!               6: coefficients of Canuto et al. (2001) (version B)
+!               7: coefficients of Cheng et al. (2002)
+! cc1         [float]
+!               coefficient cc1
+!               This variable is only used if scnd_coeff = 0
+! cc2         [float]
+!               coefficient cc2
+!               This variable is only used if scnd_coeff = 0
+! cc3         [float]
+!               coefficient cc3
+!               This variable is only used if scnd_coeff = 0
+! cc4         [float]
+!               coefficient cc4
+!               This variable is only used if scnd_coeff = 0
+! cc5         [float]
+!               coefficient cc5
+!               This variable is only used if scnd_coeff = 0
+! cc6         [float]
+!               coefficient cc6
+!               This variable is only used if scnd_coeff = 0
+! ct1         [float]
+!               coefficient ct1
+!               This variable is only used if scnd_coeff = 0
+! ct2         [float]
+!               coefficient ct2
+!               This variable is only used if scnd_coeff = 0
+! ct3         [float]
+!               coefficient ct3
+!               This variable is only used if scnd_coeff = 0
+! ct4         [float]
+!               coefficient ct4
+!               This variable is only used if scnd_coeff = 0
+! ct5         [float]
+!               coefficient ct5
+!               This variable is only used if scnd_coeff = 0
+! ctt         [float]
+!               coefficient ctt
+!               This variable is only used if scnd_coeff = 0
+!-------------------------------------------------------------------------------
 !  the 'scnd' namelist
-   integer                                       ::  scnd_method
-   integer                                       ::  kb_method
-   integer                                       ::  epsb_method
-   integer                                       ::  scnd_coeff
-   REALTYPE ,public                              ::  cc1
-   REALTYPE, public                              ::  ct1,ctt
-   REALTYPE, public                              ::  cc2,cc3,cc4,cc5,cc6
-   REALTYPE, public                              ::  ct2,ct3,ct4,ct5
+
+   integer,  public                              ::  scnd_method = 0
+   integer,  public                              ::  kb_method   = 0
+   integer,  public                              ::  epsb_method = 0
+   integer,  public                              ::  scnd_coeff  = 0
+   REALTYPE ,public                              :: &
+        cc1 = _ZERO_
+   REALTYPE, public                              :: &
+        ct1 = _ZERO_, ctt = _ZERO_
+   REALTYPE, public                              :: &
+        cc2 = _ZERO_, cc3 = _ZERO_, cc4 = _ZERO_, cc5 = _ZERO_, cc6 = _ZERO_
+   REALTYPE, public                              :: &
+        ct2 = _ZERO_, ct3 = _ZERO_, ct4 = _ZERO_, ct5 = _ZERO_
 
 !  the a_i's for the ASM
-   REALTYPE, public                              ::  a1,a2,a3,a4,a5
-   REALTYPE, public                              ::  at1,at2,at3,at4,at5
+   REALTYPE, public                              ::  &
+        a1 = _ZERO_, a2 = _ZERO_, a3 = _ZERO_, a4 = _ZERO_, a5 = _ZERO_
+   REALTYPE, public                              ::  &
+        at1 = _ZERO_, at2 = _ZERO_, at3 = _ZERO_, at4 = _ZERO_, at5 = _ZERO_
 
-
+!-------------------------------------------------------------------------------
+! internal wave model
+!-------------------------------------------------------------------------------
+! iw_model [integer]
+!            method to compute internal wave mixing
+!            0: no internal wave mixing parameterisation
+!            1: Mellor 1989 internal wave mixing
+!            2: Large et al. 1994 internal wave mixing
+! alpha    [float]
+!            coeff. for Mellor IWmodel (0: no IW, 0.7 Mellor 1989)
+!            This variable is only used if iw_model = 1
+! klimiw   [float, unit = m**2/s**2]
+!            critical value of TKE
+!            This variable is only used if iw_model = 2
+! rich_cr  [float]
+!            critical Richardson number for shear instability
+!            This variable is only used if iw_model = 2
+! numshear [float, unit = m**2/s]
+!            background diffusivity for shear instability
+!            This variable is only used if iw_model = 2
+! numiw    [float, unit = m**2/s]
+!            background viscosity for internal wave breaking
+!            This variable is only used if iw_model = 2
+! nuhiw    [float, unit = m**2/s]
+!            background diffusivity for internal wave breaking
+!            This variable is only used if iw_model = 2
+!-------------------------------------------------------------------------------
 !  the 'iw' namelist
-   integer,  public                              :: iw_model
-   REALTYPE, public                              :: alpha
-   REALTYPE, public                              :: klimiw
-   REALTYPE, public                              :: rich_cr
-   REALTYPE, public                              :: numiw
-   REALTYPE, public                              :: nuhiw
-   REALTYPE, public                              :: numshear
+   
+   integer,  public                              :: iw_model = 0
+   REALTYPE, public                              :: alpha    = 0.0_8
+   REALTYPE, public                              :: klimiw   = 1e-6_8
+   REALTYPE, public                              :: rich_cr  = 0.7_8
+   REALTYPE, public                              :: numiw    = 1.e-4_8
+   REALTYPE, public                              :: nuhiw    = 5.e-5_8
+   REALTYPE, public                              :: numshear = 5.e-3_8
 !
 ! !DEFINED PARAMETERS:
 
 !  general outline of the turbulence model
-   integer, parameter, public                    :: convective=0
-   integer, parameter, public                    :: algebraic=1
-   integer, parameter, public                    :: first_order=2
-   integer, parameter, public                    :: second_order=3
+   integer, parameter, public                    :: convective   = 0
+   integer, parameter, public                    :: algebraic    = 1
+   integer, parameter, public                    :: first_order  = 2
+   integer, parameter, public                    :: second_order = 3
 
 !  method to update TKE
-   integer, parameter, public                    :: tke_local_eq=1
-   integer, parameter, public                    :: tke_keps=2
-   integer, parameter, public                    :: tke_MY=3
+   integer, parameter, public                    :: tke_local_eq = 1
+   integer, parameter, public                    :: tke_keps     = 2
+   integer, parameter, public                    :: tke_MY       = 3
 
 !  stability functions
-   integer, parameter, public                    :: Constant=1
-   integer, parameter, public                    :: MunkAnderson=2
-   integer, parameter, public                    :: SchumGerz=3
-   integer, parameter, public                    :: EiflerSchrimpf=4
+   integer, parameter, public                    :: Constant       = 1
+   integer, parameter, public                    :: MunkAnderson   = 2
+   integer, parameter, public                    :: SchumGerz      = 3
+   integer, parameter, public                    :: EiflerSchrimpf = 4
 
 !  method to update length scale
-   integer, parameter                            :: Parabola=1
-   integer, parameter                            :: Triangle=2
-   integer, parameter                            :: Xing=3
-   integer, parameter                            :: RobertOuellet=4
-   integer, parameter                            :: Blackadar=5
-   integer, parameter                            :: BougeaultAndre=6
-   integer, parameter                            :: ispra_length=7
-   integer, parameter, public                    :: diss_eq=8
-   integer, parameter, public                    :: length_eq=9
-   integer, parameter, public                    :: generic_eq=10
+   integer, parameter                            :: Parabola       = 1
+   integer, parameter                            :: Triangle       = 2
+   integer, parameter                            :: Xing           = 3
+   integer, parameter                            :: RobertOuellet  = 4
+   integer, parameter                            :: Blackadar      = 5
+   integer, parameter                            :: BougeaultAndre = 6
+   integer, parameter                            :: ispra_length   = 7
+   integer, parameter, public                    :: diss_eq        = 8
+   integer, parameter, public                    :: length_eq      = 9
+   integer, parameter, public                    :: generic_eq     = 10
 
 !  boundary conditions
-   integer, parameter, public                    :: Dirichlet=0
-   integer, parameter, public                    :: Neumann=1
-   integer, parameter, public                    :: viscous=0
-   integer, parameter, public                    :: logarithmic=1
-   integer, parameter, public                    :: injection=2
+   integer, parameter, public                    :: Dirichlet   = 0
+   integer, parameter, public                    :: Neumann     = 1
+   integer, parameter, public                    :: viscous     = 0
+   integer, parameter, public                    :: logarithmic = 1
+   integer, parameter, public                    :: injection   = 2
 
 !  type of second-order model
-   integer, parameter                            :: quasiEq=1
-   integer, parameter                            :: weakEqKbEq=2
-   integer, parameter                            :: weakEqKb=3
+   integer, parameter                            :: quasiEq    = 1
+   integer, parameter                            :: weakEqKbEq = 2
+   integer, parameter                            :: weakEqKb   = 3
 
 !  method to solve equation for k_b
-   integer, parameter                            :: kb_algebraic=1
-   integer, parameter                            :: kb_dynamic=2
+   integer, parameter                            :: kb_algebraic = 1
+   integer, parameter                            :: kb_dynamic   = 2
 
 !  method to solve equation for epsilon_b
-   integer, parameter                            :: epsb_algebraic=1
-   integer, parameter                            :: epsb_dynamic=2
+   integer, parameter                            :: epsb_algebraic = 1
+   integer, parameter                            :: epsb_dynamic   = 2
 
 !
 ! !BUGS:
@@ -307,10 +612,6 @@
 !
 !EOP
 !
-! !LOCAL VARIABLES:
-   integer                            :: rc
-   REALTYPE                           :: L_min
-!
    namelist /turbulence/    turb_method,tke_method,            &
                             len_scale_method,stab_method
 
@@ -346,124 +647,6 @@
 !BOC
    LEVEL1 'init_turbulence'
 
-   a1 = _ZERO_
-   a2 = _ZERO_
-   a3 = _ZERO_
-   a4 = _ZERO_
-   a5 = _ZERO_
-
-   at1 = _ZERO_
-   at2 = _ZERO_
-   at3 = _ZERO_
-   at4 = _ZERO_
-   at5 = _ZERO_
-
-   cm0 = _ZERO_
-   cmsf = _ZERO_
-   cde = _ZERO_
-   rcm = _ZERO_
-   b1 = _ZERO_
-
-!  Prandtl-number in neutrally stratified flow
-   Prandtl0 = _ZERO_
-
-!  parameters for wave-breaking
-   craig_m = _ZERO_
-   sig_e0 = _ZERO_
-
-   ! Initialize all namelist variables to reasonable defaults.
-   turb_method=2
-   tke_method=2
-   len_scale_method=8
-   stab_method=3
-
-!  the 'bc' namelist
-   k_ubc=1
-   k_lbc=1
-   kb_ubc=1
-   kb_lbc=1
-   psi_ubc=1
-   psi_lbc=1
-   ubc_type=1
-   lbc_type=1
-
-!  the 'turb_param' namelist
-   cm0_fix=0.5477
-   Prandtl0_fix=0.74
-   cw=100.0
-   compute_kappa=.false.
-   kappa=0.4
-   compute_c3=.false.
-   ri_st=0.25
-   length_lim=.false.
-   galp=0.53
-   const_num=5.0e-4
-   const_nuh=5.0e-4
-   k_min=1.0e-8
-   eps_min=1.0e-12
-   kb_min=1.0e-8
-   epsb_min=1.0e-12
-
-!  the 'generic' namelist
-   compute_param=.false.
-   gen_m=1.5
-   gen_n=-1.0
-   gen_p=3.0
-   cpsi1=1.44
-   cpsi2=1.92
-   cpsi3minus=0.0
-   cpsi3plus=1.0
-   sig_kpsi=1.0
-   sig_psi=1.3
-   gen_d=-1.2
-   gen_alpha=-2.0
-   gen_l=0.2
-
-!  the 'keps' namelist
-   ce1=1.44
-   ce2=1.92
-   ce3minus=0.0
-   ce3plus=1.0
-   sig_k=1.0
-   sig_e=1.3
-   sig_peps=.false.
-
-!  the 'my' namelist
-   e1=1.8
-   e2=1.33
-   e3=1.8
-   sq=0.2
-   sl=0.2
-   my_length=1
-   new_constr=.false.
-
-!  the 'scnd' namelist
-   scnd_method = 0
-   kb_method   = 0
-   epsb_method = 0
-   scnd_coeff  = 0
-   cc1 = _ZERO_
-   ct1 = _ZERO_
-   ctt = _ZERO_
-   cc2 = _ZERO_
-   cc3 = _ZERO_
-   cc4 = _ZERO_
-   cc5 = _ZERO_
-   cc6 = _ZERO_
-   ct2 = _ZERO_
-   ct3 = _ZERO_
-   ct4 = _ZERO_
-   ct5 = _ZERO_
-
-!  the 'iw' namelist
-   iw_model=0
-   alpha=0.0
-   klimiw=1e-6
-   rich_cr=0.7
-   numiw=1.e-4
-   nuhiw=5.e-5
-   numshear=5.e-3
-
    ! read the variables from the namelist file
 
    open(namlst,file=fn,status='old',action='read',err=80)
@@ -488,149 +671,194 @@
       close (namlst)
       LEVEL2 'done.'
    endif
+   call post_init_turbulence(nlev)
+!  report on parameters and properties of the model
+   call report_model
+   return
 
+80 FATAL 'I could not open "gotmturb.nml"'
+   stop 'init_turbulence'
+81 FATAL 'I could not read "turbulence" namelist'
+   stop 'init_turbulence'
+82 FATAL 'I could not read "bc" namelist'
+   stop 'init_turbulence'
+83 FATAL 'I could not read "turb_param" namelist'
+   stop 'init_turbulence'
+84 FATAL 'I could not read "generic" namelist'
+   stop 'init_turbulence'
+85 FATAL 'I could not read "keps" namelist'
+   stop 'init_turbulence'
+86 FATAL 'I could not read "my" namelist'
+   stop 'init_turbulence'
+87 FATAL 'I could not read "scnd" namelist'
+   stop 'init_turbulence'
+88 FATAL 'I could not read "iw" namelist'
+   stop 'init_turbulence'
 
-!  allocate memory
-
+ end subroutine init_turbulence
+!EOC
+ 
+!-----------------------------------------------------------------------
+!BOP
+!
+! !IROUTINE: Allocate memory for the turbulence module
+!
+! !INTERFACE:
+ subroutine post_init_turbulence(nlev)
+! !USES:
+   IMPLICIT NONE
+!
+! !INPUT PARAMETERS:
+   integer,          intent(in)        :: nlev
+!EOP
+!
+! !LOCAL VARIABLES:
+   integer                            :: rc
+   REALTYPE                           :: L_min
+!-----------------------------------------------------------------------
+!BOC
+   
+   !  allocate memory
+   
    LEVEL2 'allocation memory..'
    allocate(tke(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (tke)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (tke)'
    tke = k_min
 
    allocate(tkeo(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (tkeo)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (tkeo)'
    tkeo = k_min
 
    allocate(eps(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (eps)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (eps)'
    eps = eps_min
 
    allocate(L(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (L)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (L)'
    L = _ZERO_
 
    LEVEL2 'allocation memory..'
    allocate(kb(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (kb)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (kb)'
    kb = kb_min
 
    LEVEL2 'allocation memory..'
    allocate(epsb(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (epsb)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (epsb)'
    epsb = epsb_min
 
    allocate(P(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (P)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (P)'
    P = _ZERO_
 
    allocate(B(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (B)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (B)'
    B = _ZERO_
 
    allocate(Pb(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (Pb)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (Pb)'
    Pb = _ZERO_
 
    allocate(num(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (num)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (num)'
    num = 1.0D-6
 
    allocate(nuh(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (nuh)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (nuh)'
    nuh = 1.0D-6
 
    allocate(nus(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (nus)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (nus)'
    nus = 1.0D-6
 
    allocate(gamu(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (gamu)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (gamu)'
    gamu = _ZERO_
 
    allocate(gamv(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (gamv)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (gamv)'
    gamv = _ZERO_
 
    allocate(gamb(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (gamb)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (gamb)'
    gamb = _ZERO_
 
    allocate(gamh(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (gamh)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (gamh)'
    gamh = _ZERO_
 
    allocate(gams(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (gams)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (gams)'
    gams = _ZERO_
 
    allocate(cmue1(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (cmue1)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (cmue1)'
    cmue1 = _ZERO_
 
    allocate(cmue2(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (cmue2)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (cmue2)'
    cmue2 = _ZERO_
 
    allocate(gam(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (gam)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (gam)'
    gam = _ZERO_
 
    allocate(an(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (an)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (an)'
    an = _ZERO_
 
    allocate(as(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (as)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (as)'
    as = _ZERO_
 
    allocate(at(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (at)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (at)'
    at = _ZERO_
 
    allocate(r(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (r)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (r)'
    r = _ZERO_
 
    allocate(Rig(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (Rig)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (Rig)'
    Rig = _ZERO_
 
    allocate(xRf(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (xRf)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (xRf)'
    xRf = _ZERO_
 
    allocate(uu(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (uu)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (uu)'
    uu = _ZERO_
 
    allocate(vv(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (vv)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (vv)'
    vv = _ZERO_
 
    allocate(ww(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (ww)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (ww)'
    ww = _ZERO_
 
 # ifdef EXTRA_OUTPUT
 
    allocate(turb1(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (turb1)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (turb1)'
    turb1 = _ZERO_
 
    allocate(turb2(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (turb2)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (turb2)'
    turb2 = _ZERO_
 
    allocate(turb3(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (turb3)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (turb3)'
    turb3 = _ZERO_
 
    allocate(turb4(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (turb4)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (turb4)'
    turb4 = _ZERO_
 
    allocate(turb5(0:nlev),stat=rc)
-   if (rc /= 0) stop 'init_turbulence: Error allocating (turb5)'
+   if (rc /= 0) stop 'post_init_turbulence: Error allocating (turb5)'
    turb5 = _ZERO_
 
 # endif
@@ -659,37 +887,17 @@
    L=L_min
 
 !  generate or analyse the model constants
-   if ((len_scale_method.eq.generic_eq).and.compute_param) then
-      call generate_model
-   else
-      call analyse_model
-   endif
-
-!  report on parameters and properties of the model
-   call report_model
-
+   if (turb_method.ne.99) then
+      if ((len_scale_method.eq.generic_eq).and.compute_param) then
+         call generate_model
+      else
+         call analyse_model
+      endif
+   end if
+      
    return
 
-80 FATAL 'I could not open "gotmturb.nml"'
-   stop 'init_turbulence'
-81 FATAL 'I could not read "turbulence" namelist'
-   stop 'init_turbulence'
-82 FATAL 'I could not read "bc" namelist'
-   stop 'init_turbulence'
-83 FATAL 'I could not read "turb_param" namelist'
-   stop 'init_turbulence'
-84 FATAL 'I could not read "generic" namelist'
-   stop 'init_turbulence'
-85 FATAL 'I could not read "keps" namelist'
-   stop 'init_turbulence'
-86 FATAL 'I could not read "my" namelist'
-   stop 'init_turbulence'
-87 FATAL 'I could not read "scnd" namelist'
-   stop 'init_turbulence'
-88 FATAL 'I could not read "iw" namelist'
-   stop 'init_turbulence'
-
- end subroutine init_turbulence
+ end subroutine post_init_turbulence
 !EOC
 
 

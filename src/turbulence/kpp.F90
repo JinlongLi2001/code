@@ -8,7 +8,7 @@
    module kpp
 !
 ! !DESCRIPTION:
-! This implentation of the KPP turbulence parameterisation is based on the
+! This implementation of the KPP turbulence parameterisation is based on the
 ! publications of \cite{Largeetal94} and \cite{Durskietal2004}.
 ! The general expression for the turbulent fluxes used in the KPP model is identical to
 ! that suggested in \eq{fluxes}. It assumes that the turbulent flux is the sum of a
@@ -343,16 +343,16 @@
    REALTYPE                              ::    gorho0
 
 !  critical bulk Richardson number
-   REALTYPE                              ::    Ric
+   REALTYPE, public                      ::    Ric
 
 !  compute surface and bottom BBL
-   logical                               ::    kpp_sbl,kpp_bbl
+   logical, public                       ::    kpp_sbl,kpp_bbl
 
 !  compute internal mixing
-   logical                               ::    kpp_interior
+   logical, public                       ::    kpp_interior
 
 !  use clipping of MLD at Ekman and Monin-Oboukhov scale
-   logical                               ::    clip_mld
+   logical, public                       ::    clip_mld
 
 !  positions of grid faces and centers
    REALTYPE, dimension(:), allocatable   ::    z_w,z_r
@@ -431,17 +431,19 @@
 !-----------------------------------------------------------------------
 !BOC
 
-   LEVEL1 'init_kpp...'
+   if (namlst.ge.0) then
+      LEVEL1 'init_kpp...'
 
-   ! read the variables from the namelist file
-   open(namlst,file=fn,status='old',action='read',err=80)
+      ! read the variables from the namelist file
+      open(namlst,file=fn,status='old',action='read',err=80)
 
-   LEVEL2 'reading kpp namelist...'
+      LEVEL2 'reading kpp namelist...'
 
-   read(namlst,nml=kpp,err=81)
-   close (namlst)
+      read(namlst,nml=kpp,err=81)
+      close (namlst)
 
-   LEVEL2 'done.'
+      LEVEL2 'done.'
+   end if
 
 !  allocate memory for variables defined in other modules
 !

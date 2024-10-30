@@ -60,10 +60,53 @@
 !
 !EOP
 !
-!  private data memebers
-   integer, public           :: eq_state_method, eq_state_mode
-   REALTYPE                  :: T0,S0,p0,dtr0,dsr0
-   logical                   :: init_linearised
+!-------------------------------------------------------------------------------
+! equation of state
+!-------------------------------------------------------------------------------
+! eq_state_mode   [integer]
+!                   choice for empirical formula for equation of state
+!                   1: UNESCO equation of state by Fofonoff and Millard (1983)
+!                   2: equation of state according Jackett et al. (2005)
+! eq_state_method [integer]
+!                   method to compute density and buoyancy from salinity,
+!                     potential temperature and pressure
+!                   1: full equation of state (i.e. with the LOCAL pressure).
+!                     This implies that T is NOT treated as the potential
+!                     temperature but rather as the in-situ temperature!
+!                   2: equation of state with pressure evaluated at the surface.
+!                     This implies that T is treated as the potential
+!                     temperature and thus rho as the potential density.
+!                   3: linearized equation of state at T0,S0,p0 (again, use
+!                     p0=p_surf to work with potential temperature and density.)
+!                   4: linear equation of state with T0,S0,dtr0,dsr0
+! T0              [float, unit = degC]
+!                   reference temperature for linear equation of state
+!                   This variable is only used if (eq_state_method = 3 or
+!                     eq_state_method = 4)
+! S0              [float, unit = psu]
+!                   reference salinity for linear equation of state
+!                   This variable is only used if (eq_state_method = 3 or
+!                     eq_state_method = 4)
+! p0              [float, unit = bar]
+!                   reference pressure for linear equation of state
+!                   This variable is only used if (eq_state_method = 3 or
+!                     eq_state_method = 4)
+! dtr0            [float]
+!                   thermal expansion coefficient for linear equation of state
+!                   This variable is only used if eq_state_method = 4
+! dsr0            [float]
+!                   saline expansion coefficient for linear equation of state
+!                   This variable is only used if eq_state_method = 4
+!-------------------------------------------------------------------------------
+
+   integer, public           :: eq_state_method = 1
+   integer, public           :: eq_state_mode   = 2
+   logical                   :: init_linearised = .true.
+   REALTYPE, public          :: T0   =  10.0_8
+   REALTYPE, public          :: S0   =  35.0_8
+   REALTYPE, public          :: p0   =   0.0_8
+   REALTYPE, public          :: dtr0 =  -0.17_8
+   REALTYPE, public          :: dsr0 =   0.78_8
 !
 !-----------------------------------------------------------------------
 
@@ -98,7 +141,6 @@
 !-----------------------------------------------------------------------
 !BOC
    LEVEL1 'init_eqstate'
-   init_linearised = .true.
    if(present(namlst)) then
       read(namlst,nml=eqstate,err=80)
    end if

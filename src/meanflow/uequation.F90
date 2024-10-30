@@ -165,7 +165,7 @@
       Lsour(i) = _ZERO_
 
 !     add external and internal pressure gradients
-      Qsour(i) = Qsour(i) - gravity*dzetadx + idpdx(i)
+      Qsour(i) = Qsour(i) - gravity*dzetadx ! + idpdx(i)
 
 #ifdef SEAGRASS
       Lsour(i) = -drag(i)/h(i)*sqrt(u(i)*u(i)+v(i)*v(i))

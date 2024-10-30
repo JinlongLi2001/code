@@ -17,7 +17,7 @@
    private
 !
 ! !PUBLIC MEMBER FUNCTIONS:
-   public init_meanflow, clean_meanflow
+   public post_init_meanflow, init_meanflow, clean_meanflow
 #ifdef _PRINTSTATE_
    public print_state_meanflow
 #endif
@@ -67,35 +67,110 @@
 
 # endif
 
+!-------------------------------------------------------------------------------
+! meanflow
+!-------------------------------------------------------------------------------
+! h0b          [float, unit = m]
+!                bottom roughness  - Note: z0b=0.03*h0b+0.1*nu/ustar
+! z0s_min      [float, unit = m]
+!                minimum value of z0s, default value if charnock=.false.
+! charnock     [bool]
+!                adaptation of Charnock 1955 formula used
+! charnock_val [float]
+!                emp. constant in Charnock 1955 formula (default = 1400.)
+!                This variable is only used if charnock = True
+! ddu          [float]
+!                grid zooming (surface), 0: no zooming; > 3 strong zooming
+!                This variable is only used if grid_method = 0
+! ddl          [float]
+!                grid zooming (bottom), 0: no zooming; > 3 strong zooming
+!                This variable is only used if grid_method = 0
+! grid_method  [integer]
+!                type of vertical grid
+!                0: zooming of grid with ddl, ddu >= 0
+!                1: sigma grid (relative depth fractions) read from file
+!                2: cartesian grid (fixed layer height in m) read from file
+!                3: adaptive grid
+! c1ad         [float]
+!                weighting factor for adaptation to buoyancy frequency
+!                This variable is only used if grid_method = 3
+! c2ad         [float]
+!                weighting factor for adaptation to shear frequency
+!                This variable is only used if grid_method = 3
+! c3ad         [float]
+!                weighting factor for adaptation to surface distance
+!                This variable is only used if grid_method = 3
+! c4ad         [float]
+!                weighting factor for adaptation to background
+!                This variable is only used if grid_method = 3
+! Tgrid        [float]
+!                grid adaptation time scale
+!                This variable is only used if grid_method = 3
+! NNnorm       [float]
+!                normalisation factor for adaptation to buoyancy frequency
+!                This variable is only used if grid_method = 3
+! SSnorm       [float]
+!                normalisation factor for adaptation to shear frequency
+!                This variable is only used if grid_method = 3
+! dsurf        [float]
+!                normalisation factor for adaptation to surface distance
+!                This variable is only used if grid_method = 3
+! dtgrid       [float]
+!                time step for grid adaptation (must be fraction of dt)
+!                This variable is only used if grid_method = 3
+! grid_file    [file path]
+!                file for sigma or cartesian grid. the first line gives the
+!                  number of layers, the following lines give fractions or layer
+!                  heights in m from the surface down to the bottom.
+!                This variable is only used if (grid_method = 1 or grid_method =
+!                  2)
+! gravity      [float, unit = m/s^2]
+!                gravitational acceleration
+! rho_0        [float, unit = kg/m^3]
+!                reference density
+! cp           [float, unit = J/kg/K]
+!                specific heat of sea water
+! avmolu       [float, unit = m^2/s]
+!                molecular viscosity for momentum
+! avmolt       [float, unit = m^2/s]
+!                molecular diffusity for temperature
+! avmols       [float, unit = m^2/s]
+!                molecular diffusity for salinity
+! MaxItz0b     [integer, minimum = 1, maximum = 1000]
+!                max # of iterations for z0b as function of u_taub
+! no_shear     [bool]
+!                .true.: shear production term P is set to zero
+!-------------------------------------------------------------------------------
 !  the 'meanflow' namelist
-   REALTYPE, public                    :: h0b
-   REALTYPE, public                    :: z0s_min
-   logical,  public                    :: charnock
-   REALTYPE, public                    :: charnock_val
-   REALTYPE, public                    :: ddu
-   REALTYPE, public                    :: ddl
-   integer,  public                    :: grid_method
-   REALTYPE, public                    :: c1ad
-   REALTYPE, public                    :: c2ad
-   REALTYPE, public                    :: c3ad
-   REALTYPE, public                    :: c4ad
-   REALTYPE, public                    :: Tgrid
-   REALTYPE, public                    :: NNnorm
-   REALTYPE, public                    :: SSnorm
-   REALTYPE, public                    :: dsurf
-   REALTYPE, public                    :: dtgrid
-   character(LEN=PATH_MAX), public     :: grid_file
-   REALTYPE, public                    :: gravity
-   REALTYPE, public                    :: rho_0
-   REALTYPE, public                    :: cp
-   REALTYPE, public                    :: avmolu
-   REALTYPE, public                    :: avmolT
-   REALTYPE, public                    :: avmolS
-   integer,  public                    :: MaxItz0b
-   logical,  public                    :: no_shear
+   
+   REALTYPE, public                    :: h0b          = 0.05_8
+   REALTYPE, public                    :: z0s_min      = 0.02_8
+   logical,  public                    :: charnock     = .false.
+   REALTYPE, public                    :: charnock_val = 1400._8
+   REALTYPE, public                    :: ddu          = _ZERO_
+   REALTYPE, public                    :: ddl          = _ZERO_
+   integer,  public                    :: grid_method  = 1
+   REALTYPE, public                    :: c1ad         = 0.8_8
+   REALTYPE, public                    :: c2ad         = 0.0_8
+   REALTYPE, public                    :: c3ad         = 0.1_8
+   REALTYPE, public                    :: c4ad         = 0.1_8
+   REALTYPE, public                    :: Tgrid        = 3600._8
+   REALTYPE, public                    :: NNnorm       = 0.2_8
+   REALTYPE, public                    :: SSnorm       = 0.2_8
+   REALTYPE, public                    :: dsurf        = 10._8
+   REALTYPE, public                    :: dtgrid       = 5._8
+   character(LEN=PATH_MAX), public     :: grid_file    = 'grid.dat'
+   REALTYPE, public                    :: gravity      = 9.81_8
+   REALTYPE, public                    :: rho_0        = 1027._8
+   REALTYPE, public                    :: cp           = 3985._8
+   REALTYPE, public                    :: avmolu       = 1.3e-6_8
+   REALTYPE, public                    :: avmolT       = 1.4e-7_8
+   REALTYPE, public                    :: avmolS       = 1.1e-9_8
+   integer,  public                    :: MaxItz0b     = 10
+   logical,  public                    :: no_shear     = .false.
 
 !  the roughness lengths
-   REALTYPE, public                    :: z0b,z0s,za
+   REALTYPE, public                    :: z0b, z0s, za
 
 !  the coriolis parameter
    REALTYPE, public                    :: cori
@@ -112,7 +187,7 @@
    REALTYPE, public                    :: runtimeu, runtimev
 !
 ! !DEFINED PARAMETERS:
-   REALTYPE, public, parameter         :: pi=3.141592654
+   REALTYPE, public, parameter         :: pi=3.14159265359
 !
 ! !REVISION HISTORY:
 !  Original author(s): Karsten Bolding & Hans Burchard
@@ -154,8 +229,6 @@
 !
 !EOP
 !
-! !LOCAL VARIABLES:
-   integer                   :: rc
 
    namelist /meanflow/  h0b,z0s_min,charnock,charnock_val,ddu,ddl,     &
                         grid_method,c1ad,c2ad,c3ad,c4ad,Tgrid,NNnorm,  &
@@ -166,42 +239,52 @@
 !BOC
    LEVEL1 'init_meanflow'
 
-!  Initialize namelist variables with default values.
-!  Note that namelists should preferably contain all variables,
-!  which implies that all defaults defined below will be overwritten.
-   h0b          = 0.05
-   z0s_min      = 0.02
-   charnock     = .false.
-   charnock_val = 1400.
-   ddu          = _ZERO_
-   ddl          = _ZERO_
-   grid_method  = 1
-   c1ad         = 0.8
-   c2ad         = 0.0
-   c3ad         = 0.1
-   c4ad         = 0.1
-   Tgrid        = 3600.
-   NNnorm       = 0.2
-   SSnorm       = 0.2
-   dsurf        = 10.0
-   dtgrid       = 5.
-   grid_file    = 'grid.dat'
-   gravity      = 9.81
-   rho_0        = 1027.
-   cp           = 3985.
-   avmolu       = 1.3e-6
-   avmolT       = 1.4e-7
-   avmolS       = 1.1e-9
-   MaxItz0b     = 10
-   no_shear     = .false.
-
-!  Read namelist from file.
+   !  Read namelist from file.
    open(namlst,file=fn,status='old',action='read',err=80)
    LEVEL2 'reading meanflow namelists..'
    read(namlst,nml=meanflow,err=81)
    close (namlst)
    LEVEL2 'done.'
 
+   call post_init_meanflow(nlev,latitude)
+   return
+
+80 FATAL 'I could not open: ',trim(fn)
+   stop 'init_meanflow'
+81 FATAL 'I could not read "meanflow" namelist'
+   stop 'init_meanflow'
+ end subroutine init_meanflow
+!EOC
+
+!-----------------------------------------------------------------------
+!BOP
+!
+! !IROUTINE: Allocates the mean flow variables
+!
+! !INTERFACE:
+ subroutine post_init_meanflow(nlev,latitude)
+!
+! !DESCRIPTION:
+!  Allocates memory and initialises everything related
+!  to the `meanflow' component of GOTM.
+!
+! !USES:
+   IMPLICIT NONE
+!
+! !INPUT PARAMETERS:
+   integer, intent(in)                      :: nlev
+   REALTYPE, intent(in)                     :: latitude
+!
+! !REVISION HISTORY:
+!  Original author(s): Karsten Bolding & Hans Burchard
+!
+!  See log for the meanflow module
+!
+!EOP
+!
+! !LOCAL VARIABLES:
+   integer                   :: rc
+   
 !  Important: we do not initialize "depth" here, because it has already been initialized by gotm.F90.
 
 !  Initialize bottom and surface stress to zero
@@ -363,12 +446,8 @@
    LEVEL2 'done.'
 
    return
-80 FATAL 'I could not open: ',trim(fn)
-   stop 'init_meanflow'
-81 FATAL 'I could not read "meanflow" namelist'
-   stop 'init_meanflow'
 
-   end subroutine init_meanflow
+   end subroutine post_init_meanflow
 !EOC
 
 !-----------------------------------------------------------------------

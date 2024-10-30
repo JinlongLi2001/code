@@ -182,12 +182,12 @@
    end select
 
 !  relaxation to observed value
-   if (minval(Taur).lt.1.d10) then
-      do i=1,N
-         bu(i)=bu(i)+dt/Taur(i)
-         du(i)=du(i)+dt/Taur(i)*Yobs(i)
-      end do
-   end if
+   ! if (minval(Taur).lt.1.d10) then
+   !    do i=1,N
+   !       bu(i)=bu(i)+dt/Taur(i)
+   !       du(i)=du(i)+dt/Taur(i)*Yobs(i)
+   !    end do
+   ! end if
 
 !  solve linear system
    call tridiagonal(N,1,N,Y)
